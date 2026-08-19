@@ -4,12 +4,16 @@ import android.app.Activity;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.view.View;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.widget.Button;
+import android.widget.LinearLayout;
 
 public class MainActivity extends Activity {
     private WebView webView;
+    private LinearLayout homeLayout;
     private Handler handler = new Handler(Looper.getMainLooper());
     private Runnable adBlockRunnable;
 
@@ -17,8 +21,28 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        // Main Layout Container
+        LinearLayout mainLayout = new LinearLayout(this);
+        mainLayout.setOrientation(LinearLayout.VERTICAL);
+
+        // 1. Home Selection Screen (YouTube / YouTube Music)
+        homeLayout = new LinearLayout(this);
+        homeLayout.setOrientation(LinearLayout.VERTICAL);
+        homeLayout.setPadding(60, 100, 60, 100);
+        homeLayout.setBackgroundColor(0xFF111827); // Dark Theme
+
+        Button btnYouTube = createOptionButton("▶️ Open YouTube", "#FF0000");
+        Button btnYTMusic = createOptionButton("🎵 Open YouTube Music", "#D97706");
+
+        btnYouTube.setOnClickListener(v -> loadPlatform("https://m.youtube.com"));
+        btnYTMusic.setOnClickListener(v -> loadPlatform("https://music.youtube.com"));
+
+        homeLayout.addView(btnYouTube);
+        homeLayout.addView(btnYTMusic);
+
+        // 2. WebView Container
         webView = new WebView(this);
-        setContentView(webView);
+        webView.setVisibility(View.GONE);
 
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
@@ -28,29 +52,46 @@ public class MainActivity extends Activity {
 
         webView.setWebViewClient(new WebViewClient() {
             @Override
-            public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
-                super.onPageStarted(view, url, favicon);
-                injectEngine();
-            }
-
-            @Override
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
                 injectEngine();
             }
         });
 
-        webView.loadUrl("https://m.youtube.com");
+        mainLayout.addView(homeLayout);
+        mainLayout.addView(webView, new LinearLayout.LayoutParams(-1, -1));
+        setContentView(mainLayout);
 
-        // Continuous Injector Loop for Dynamic Single Page Apps (SPA)
+        // Background Ad-Block Engine
         adBlockRunnable = new Runnable() {
             @Override
             public void run() {
-                injectEngine();
+                if (webView.getVisibility() == View.VISIBLE) {
+                    injectEngine();
+                }
                 handler.postDelayed(this, 1000);
             }
         };
         handler.post(adBlockRunnable);
+    }
+
+    private Button createOptionButton(String text, String colorHex) {
+        Button btn = new Button(this);
+        btn.setText(text);
+        btn.setTextColor(0xFFFFFFFF);
+        btn.setTextSize(16);
+        btn.setPadding(30, 40, 30, 40);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
+        params.setMargins(0, 20, 0, 20);
+        btn.setLayoutParams(params);
+        btn.setBackgroundColor(android.graphics.Color.parseColor(colorHex));
+        return btn;
+    }
+
+    private void loadPlatform(String url) {
+        homeLayout.setVisibility(View.GONE);
+        webView.setVisibility(View.VISIBLE);
+        webView.loadUrl(url);
     }
 
     private void injectEngine() {
@@ -82,17 +123,12 @@ public class MainActivity extends Activity {
     }
 
     @Override
-    protected void onDestroy() {
-        super.onDestroy();
-        if (handler != null && adBlockRunnable != null) {
-            handler.removeCallbacks(adBlockRunnable);
-        }
-    }
-
-    @Override
     public void onBackPressed() {
-        if (webView.canGoBack()) {
+        if (webView.getVisibility() == View.VISIBLE && webView.canGoBack()) {
             webView.goBack();
+        } else if (webView.getVisibility() == View.VISIBLE) {
+            webView.setVisibility(View.GONE);
+            homeLayout.setVisibility(View.VISIBLE);
         } else {
             super.onBackPressed();
         }
