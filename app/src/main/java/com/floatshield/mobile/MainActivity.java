@@ -13,18 +13,31 @@ import android.view.animation.Animation;
 import android.view.animation.ScaleAnimation;
 import android.webkit.CookieManager;
 import android.webkit.WebChromeClient;
+import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
-import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+
+import java.io.ByteArrayInputStream;
+import java.util.Arrays;
+import java.util.List;
 
 public class MainActivity extends Activity {
     private WebView webView;
     private LinearLayout homeLayout;
     private Handler handler = new Handler(Looper.getMainLooper());
     private Runnable adBlockRunnable;
+    private int blockedCount = 0;
+
+    // Known YouTube Ad Networks & In-Stream Tracking Endpoints
+    private static final List<String> AD_DOMAINS = Arrays.asList(
+            "doubleclick.net", "googleadservices.com", "googlesyndication.com",
+            "/pagead/", "/ptracking", "/api/stats/ads", "pubads",
+            "ad_status", "adunit", "googleads"
+    );
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -32,9 +45,9 @@ public class MainActivity extends Activity {
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(Color.parseColor("#090D16")); 
+        root.setBackgroundColor(Color.parseColor("#090D16"));
 
-        // 1. Futuristic Glassmorphic Dashboard UI
+        // Dashboard Home UI
         homeLayout = new LinearLayout(this);
         homeLayout.setOrientation(LinearLayout.VERTICAL);
         homeLayout.setGravity(Gravity.CENTER);
@@ -49,15 +62,14 @@ public class MainActivity extends Activity {
         title.setGravity(Gravity.CENTER);
 
         TextView subtitle = new TextView(this);
-        subtitle.setText("Ad-Free Streaming Engine");
+        subtitle.setText("Deep Ad-Intercept Engine");
         subtitle.setTextSize(14);
         subtitle.setTextColor(Color.parseColor("#64748B"));
         subtitle.setGravity(Gravity.CENTER);
         subtitle.setPadding(0, 10, 0, 80);
 
-        // Official Red & Pink Accent Platform Cards
-        LinearLayout btnYouTube = createOptionCard("YouTube", "#FF0000", "https://upload.wikimedia.org/wikipedia/commons/e/ef/Youtube_logo.png");
-        LinearLayout btnYTMusic = createOptionCard("YouTube Music", "#FF0055", "https://upload.wikimedia.org/wikipedia/commons/6/6a/Youtube_Music_icon.svg");
+        LinearLayout btnYouTube = createOptionCard("▶️  YouTube");
+        LinearLayout btnYTMusic = createOptionCard("🎵  YouTube Music");
 
         btnYouTube.setOnClickListener(v -> animateAndLoad(v, "https://m.youtube.com"));
         btnYTMusic.setOnClickListener(v -> animateAndLoad(v, "https://music.youtube.com"));
@@ -67,7 +79,7 @@ public class MainActivity extends Activity {
         homeLayout.addView(btnYouTube);
         homeLayout.addView(btnYTMusic);
 
-        // 2. Android 16 Stricter-Security Compatible WebView Engine
+        // Advanced Network Intercepting WebView Engine
         webView = new WebView(this);
         webView.setVisibility(View.GONE);
         webView.setLayoutParams(new LinearLayout.LayoutParams(-1, -1));
@@ -76,12 +88,8 @@ public class MainActivity extends Activity {
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
         settings.setDatabaseEnabled(true);
-        settings.setAllowFileAccess(true);
-        settings.setAllowContentAccess(true);
         settings.setMediaPlaybackRequiresUserGesture(false);
-        
-        // Android 16 Chrome Modern Desktop/Mobile UserAgent Bypass
-        settings.setUserAgentString("Mozilla/5.0 (Linux; Android 16; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36");
+        settings.setUserAgentString("Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36");
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
@@ -90,10 +98,25 @@ public class MainActivity extends Activity {
 
         webView.setWebChromeClient(new WebChromeClient());
         webView.setWebViewClient(new WebViewClient() {
+
+            // Network-Level Ad Dropper
+            @Override
+            public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                String url = request.getUrl().toString().toLowerCase();
+                for (String domain : AD_DOMAINS) {
+                    if (url.contains(domain)) {
+                        blockedCount++;
+                        // Return empty response to drop the connection completely
+                        return new WebResourceResponse("text/plain", "UTF-8", new ByteArrayInputStream("".getBytes()));
+                    }
+                }
+                return super.shouldInterceptRequest(view, request);
+            }
+
             @Override
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
-                forceInjectEngine();
+                runClientDomPurge();
             }
         });
 
@@ -101,23 +124,23 @@ public class MainActivity extends Activity {
         root.addView(webView);
         setContentView(root);
 
-        // Continuous Loop Optimized for Android 16 Lifecycle
+        // Multi-Layer Runtime Enforcement Loop
         adBlockRunnable = new Runnable() {
             @Override
             public void run() {
                 if (webView.getVisibility() == View.VISIBLE) {
-                    forceInjectEngine();
+                    runClientDomPurge();
                 }
-                handler.postDelayed(this, 500); // Faster 0.5s checks
+                handler.postDelayed(this, 400); // Fast 400ms scan
             }
         };
         handler.post(adBlockRunnable);
     }
 
-    private LinearLayout createOptionCard(String title, String accentColor, String logoUrl) {
+    private LinearLayout createOptionCard(String title) {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.HORIZONTAL);
-        card.setGravity(Gravity.CENTER_VERTICAL);
+        card.setGravity(Gravity.CENTER);
         card.setPadding(50, 45, 50, 45);
 
         GradientDrawable shape = new GradientDrawable();
@@ -154,35 +177,36 @@ public class MainActivity extends Activity {
         }, 150);
     }
 
-    private void forceInjectEngine() {
-        // Universal Native & Dynamic JS Injector for Android 16 Security
+    private void runClientDomPurge() {
+        // Deep JS Purge Engine with Muted Speed Fast-Forwarding
         String js = "javascript:(function() {" +
                 "  try {" +
                 "    if (!document.getElementById('floatshield-badge')) {" +
                 "      var badge = document.createElement('div');" +
                 "      badge.id = 'floatshield-badge';" +
-                "      badge.style.cssText = 'position:fixed!important;bottom:24px!important;right:20px!important;background:rgba(15,23,42,0.92)!important;backdrop-filter:blur(12px)!important;color:#38BDF8!important;padding:10px 18px!important;border-radius:40px!important;font-family:sans-serif!important;font-size:13px!important;font-weight:800!important;z-index:2147483647!important;border:1.5px solid #38BDF8!important;pointer-events:none!important;box-shadow:0 8px 24px rgba(0,0,0,0.5)!important;';" +
-                "      badge.innerHTML = '🛡️ Shield: <span id=\"shield-count\">0</span> Blocked';" +
+                "      badge.style.cssText = 'position:fixed!important;bottom:20px!important;right:20px!important;background:rgba(15,23,42,0.9)!important;color:#38BDF8!important;padding:8px 16px!important;border-radius:30px!important;font-size:12px!important;font-weight:bold!important;z-index:2147483647!important;border:1px solid #38BDF8!important;pointer-events:none!important;';" +
+                "      badge.innerHTML = '🛡️ Shield: <span id=\"shield-count\">" + blockedCount + "</span> Blocked';" +
                 "      (document.body || document.documentElement).appendChild(badge);" +
+                "    } else {" +
+                "      document.getElementById('shield-count').innerText = '" + blockedCount + "';" +
                 "    }" +
-                "    var countEl = document.getElementById('shield-count');" +
-                "    var count = parseInt(countEl ? countEl.innerText : '0');" +
-                "    var selectors = ['ytm-promoted-sparkles-web-renderer', 'ytm-companion-ad-renderer', '.ytp-ad-overlay-container', 'ytm-statement-banner-renderer', 'div[class*=\"ad-slot\"]', 'ad-slot-renderer', 'ytm-promoted-video-renderer', 'ytm-inline-ad-renderer', 'div[class*=\"ad-showing\"]'];" +
-                "    selectors.forEach(function(s) {" +
+                "    var adSelectors = ['.ad-showing', '.ad-interrupting', 'ytm-promoted-sparkles-web-renderer', 'ytm-companion-ad-renderer', 'ytm-statement-banner-renderer', 'ad-slot-renderer', '.ytp-ad-overlay-container'];" +
+                "    adSelectors.forEach(function(s) {" +
                 "      var els = document.querySelectorAll(s);" +
-                "      els.forEach(function(el) {" +
-                "        if(el && el.style.display !== 'none') { el.style.setProperty('display', 'none', 'important'); count++; }" +
-                "      });" +
+                "      els.forEach(function(el) { el.remove(); });" +
                 "    });" +
                 "    var video = document.querySelector('video');" +
-                "    var isAd = document.querySelector('.ad-showing, .ad-interrupting, .ytp-ad-player-overlay, .ytm-ad-player-overlay');" +
-                "    var skipBtn = document.querySelector('.ytp-ad-skip-button, .ytp-ad-skip-button-modern, .ytm-ad-skip-button, .ytp-ad-skip-button-slot');" +
-                "    if(skipBtn) { skipBtn.click(); count++; }" +
-                "    if(isAd && video && !isNaN(video.duration) && video.duration > 0) { video.currentTime = video.duration - 0.1; count++; }" +
-                "    if(countEl) countEl.innerText = count;" +
+                "    var isAdPlaying = document.querySelector('.ad-showing, .ad-interrupting');" +
+                "    var skipBtn = document.querySelector('.ytp-ad-skip-button, .ytp-ad-skip-button-modern, .ytm-ad-skip-button');" +
+                "    if (skipBtn) { skipBtn.click(); }" +
+                "    if (isAdPlaying && video) {" +
+                "      video.muted = true;" +
+                "      video.playbackRate = 16.0;" +
+                "      if (!isNaN(video.duration) && video.duration > 0) { video.currentTime = video.duration - 0.1; }" +
+                "    }" +
                 "  } catch(e) {}" +
                 "})();";
-        
+
         webView.post(() -> webView.evaluateJavascript(js, null));
     }
 
