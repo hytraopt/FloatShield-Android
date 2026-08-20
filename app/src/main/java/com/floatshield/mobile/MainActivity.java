@@ -32,11 +32,10 @@ public class MainActivity extends Activity {
     private Runnable adBlockRunnable;
     private int blockedCount = 0;
 
-    // Known YouTube Ad Networks & In-Stream Tracking Endpoints
     private static final List<String> AD_DOMAINS = Arrays.asList(
             "doubleclick.net", "googleadservices.com", "googlesyndication.com",
             "/pagead/", "/ptracking", "/api/stats/ads", "pubads",
-            "ad_status", "adunit", "googleads"
+            "ad_status", "adunit", "googleads", "youtube.com/api/stats/ads"
     );
 
     @Override
@@ -47,7 +46,7 @@ public class MainActivity extends Activity {
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(Color.parseColor("#090D16"));
 
-        // Dashboard Home UI
+        // Home Dashboard UI
         homeLayout = new LinearLayout(this);
         homeLayout.setOrientation(LinearLayout.VERTICAL);
         homeLayout.setGravity(Gravity.CENTER);
@@ -62,7 +61,7 @@ public class MainActivity extends Activity {
         title.setGravity(Gravity.CENTER);
 
         TextView subtitle = new TextView(this);
-        subtitle.setText("Deep Ad-Intercept Engine");
+        subtitle.setText("Deep Payload Interceptor");
         subtitle.setTextSize(14);
         subtitle.setTextColor(Color.parseColor("#64748B"));
         subtitle.setGravity(Gravity.CENTER);
@@ -79,7 +78,7 @@ public class MainActivity extends Activity {
         homeLayout.addView(btnYouTube);
         homeLayout.addView(btnYTMusic);
 
-        // Advanced Network Intercepting WebView Engine
+        // WebView Engine
         webView = new WebView(this);
         webView.setVisibility(View.GONE);
         webView.setLayoutParams(new LinearLayout.LayoutParams(-1, -1));
@@ -89,7 +88,7 @@ public class MainActivity extends Activity {
         settings.setDomStorageEnabled(true);
         settings.setDatabaseEnabled(true);
         settings.setMediaPlaybackRequiresUserGesture(false);
-        settings.setUserAgentString("Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36");
+        settings.setUserAgentString("Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36");
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
@@ -98,15 +97,12 @@ public class MainActivity extends Activity {
 
         webView.setWebChromeClient(new WebChromeClient());
         webView.setWebViewClient(new WebViewClient() {
-
-            // Network-Level Ad Dropper
             @Override
             public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
                 String url = request.getUrl().toString().toLowerCase();
                 for (String domain : AD_DOMAINS) {
                     if (url.contains(domain)) {
                         blockedCount++;
-                        // Return empty response to drop the connection completely
                         return new WebResourceResponse("text/plain", "UTF-8", new ByteArrayInputStream("".getBytes()));
                     }
                 }
@@ -114,9 +110,15 @@ public class MainActivity extends Activity {
             }
 
             @Override
+            public void onLoadResource(WebView view, String url) {
+                super.onLoadResource(view, url);
+                injectPayloadHijack();
+            }
+
+            @Override
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
-                runClientDomPurge();
+                injectPayloadHijack();
             }
         });
 
@@ -124,14 +126,14 @@ public class MainActivity extends Activity {
         root.addView(webView);
         setContentView(root);
 
-        // Multi-Layer Runtime Enforcement Loop
+        // Background Loop for Dynamic Skipping
         adBlockRunnable = new Runnable() {
             @Override
             public void run() {
                 if (webView.getVisibility() == View.VISIBLE) {
-                    runClientDomPurge();
+                    injectPayloadHijack();
                 }
-                handler.postDelayed(this, 400); // Fast 400ms scan
+                handler.postDelayed(this, 300); // Ultra-fast 300ms cycle
             }
         };
         handler.post(adBlockRunnable);
@@ -177,10 +179,20 @@ public class MainActivity extends Activity {
         }, 150);
     }
 
-    private void runClientDomPurge() {
-        // Deep JS Purge Engine with Muted Speed Fast-Forwarding
+    private void injectPayloadHijack() {
+        // Deep JS Hijack: Modifies JSON response objects before YouTube renderer parses them
         String js = "javascript:(function() {" +
                 "  try {" +
+                "    if (!window.fs_hijacked) {" +
+                "      window.fs_hijacked = true;" +
+                "      const origJSON = JSON.parse;" +
+                "      JSON.parse = function(text) {" +
+                "        let data = origJSON(text);" +
+                "        if (data && data.adPlacements) { delete data.adPlacements; }" +
+                "        if (data && data.playerResponse && data.playerResponse.adPlacements) { delete data.playerResponse.adPlacements; }" +
+                "        return data;" +
+                "      };" +
+                "    }" +
                 "    if (!document.getElementById('floatshield-badge')) {" +
                 "      var badge = document.createElement('div');" +
                 "      badge.id = 'floatshield-badge';" +
@@ -196,7 +208,7 @@ public class MainActivity extends Activity {
                 "      els.forEach(function(el) { el.remove(); });" +
                 "    });" +
                 "    var video = document.querySelector('video');" +
-                "    var isAdPlaying = document.querySelector('.ad-showing, .ad-interrupting');" +
+                "    var isAdPlaying = document.querySelector('.ad-showing, .ad-interrupting, .ytp-ad-player-overlay');" +
                 "    var skipBtn = document.querySelector('.ytp-ad-skip-button, .ytp-ad-skip-button-modern, .ytm-ad-skip-button');" +
                 "    if (skipBtn) { skipBtn.click(); }" +
                 "    if (isAdPlaying && video) {" +
