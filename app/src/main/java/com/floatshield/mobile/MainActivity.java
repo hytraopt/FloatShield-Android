@@ -50,7 +50,7 @@ public class MainActivity extends Activity {
         title.setGravity(Gravity.CENTER);
 
         TextView subtitle = new TextView(this);
-        subtitle.setText("Background Playback Enabled");
+        subtitle.setText("Ultra-Smooth & Background Engine");
         subtitle.setTextSize(14);
         subtitle.setTextColor(Color.parseColor("#64748B"));
         subtitle.setGravity(Gravity.CENTER);
@@ -71,11 +71,17 @@ public class MainActivity extends Activity {
         webView.setVisibility(View.GONE);
         webView.setLayoutParams(new LinearLayout.LayoutParams(-1, -1));
 
+        // Speed & Hardware Acceleration Tuning
+        webView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
         settings.setDatabaseEnabled(true);
         settings.setMediaPlaybackRequiresUserGesture(false);
+        settings.setRenderPriority(WebSettings.RenderPriority.HIGH);
+        settings.setCacheMode(WebSettings.LOAD_DEFAULT);
+        
         settings.setUserAgentString("Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36");
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
@@ -88,7 +94,7 @@ public class MainActivity extends Activity {
             @Override
             public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
                 String url = request.getUrl().toString().toLowerCase();
-                if (url.contains("sw.js") || url.contains("doubleclick.net") || url.contains("googleads")) {
+                if (url.contains("sw.js") || url.contains("doubleclick.net") || url.contains("googleads") || url.contains("/api/stats/ads")) {
                     return new WebResourceResponse("text/plain", "UTF-8", new ByteArrayInputStream("".getBytes()));
                 }
                 return super.shouldInterceptRequest(view, request);
@@ -99,13 +105,14 @@ public class MainActivity extends Activity {
         root.addView(webView);
         setContentView(root);
 
+        // Ultra-fast 200ms background audio check
         adBlockRunnable = new Runnable() {
             @Override
             public void run() {
                 if (webView.getVisibility() == View.VISIBLE) {
-                    injectPayloadHijack();
+                    keepAudioAlive();
                 }
-                handler.postDelayed(this, 300);
+                handler.postDelayed(this, 200);
             }
         };
         handler.post(adBlockRunnable);
@@ -114,13 +121,26 @@ public class MainActivity extends Activity {
     @Override
     protected void onPause() {
         super.onPause();
-        webView.onResume(); 
+        // Prevent Android OS from pausing audio rendering
+        if (webView != null) {
+            webView.onResume();
+        }
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        if (webView != null) {
+            webView.onResume();
+        }
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        webView.onResume();
+        if (webView != null) {
+            webView.onResume();
+        }
     }
 
     private LinearLayout createOptionCard(String title) {
@@ -155,10 +175,10 @@ public class MainActivity extends Activity {
             homeLayout.setVisibility(View.GONE);
             webView.setVisibility(View.VISIBLE);
             webView.loadUrl(url);
-        }, 150);
+        }, 120);
     }
 
-    private void injectPayloadHijack() {
+    private void keepAudioAlive() {
         String js = "javascript:(function() {" +
                 "  try {" +
                 "    Object.defineProperty(document, 'hidden', { value: false, writable: true });" +
@@ -166,7 +186,7 @@ public class MainActivity extends Activity {
                 "    var video = document.querySelector('video');" +
                 "    var skipBtn = document.querySelector('.ytp-ad-skip-button, .ytm-ad-skip-button');" +
                 "    if (skipBtn) skipBtn.click();" +
-                "    if (video && video.paused) video.play();" +
+                "    if (video && video.paused && !video.ended) { video.play(); }" +
                 "  } catch(e) {}" +
                 "})();";
         webView.post(() -> webView.evaluateJavascript(js, null));
