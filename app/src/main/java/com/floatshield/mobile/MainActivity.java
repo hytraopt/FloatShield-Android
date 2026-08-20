@@ -158,53 +158,38 @@ public class MainActivity extends Activity {
         return card;
     }
 
-    private void animateAndLoad(View view, String url) {
-        ScaleAnimation anim = new ScaleAnimation(1f, 0.94f, 1f, 0.94f, Animation.RELATIVE_TO_SELF, 0.5f, Animation.RELATIVE_TO_SELF, 0.5f);
-        anim.setDuration(120);
-        anim.setRepeatCount(1);
-        anim.setRepeatMode(Animation.REVERSE);
-        view.startAnimation(anim);
-
-        handler.postDelayed(() -> {
-            homeLayout.setVisibility(View.GONE);
-            webView.setVisibility(View.VISIBLE);
-            webView.loadUrl(url);
-        }, 150);
-    }
-
-    private void applyCSSAndScriptInjection() {
-        // Injection: CSS Hiding + Instant Video Mute Auto-Skip
+        private void injectPayloadHijack() {
         String js = "javascript:(function() {" +
                 "  try {" +
-                "    if (!document.getElementById('fs-css-override')) {" +
-                "      var style = document.createElement('style');" +
-                "      style.id = 'fs-css-override';" +
-                "      style.innerHTML = 'ytm-promoted-sparkles-web-renderer, ytm-companion-ad-renderer, .ad-showing, .ad-interrupting, .ytp-ad-overlay-container, ad-slot-renderer, ytm-statement-banner-renderer, .ytp-ad-skip-button-slot { display: none !important; visibility: hidden !important; opacity: 0 !important; }';" +
-                "      (document.head || document.documentElement).appendChild(style);" +
+                // Bypass Visibility Check (Background Play Fix)
+                "    Object.defineProperty(document, 'hidden', { value: false, writable: true });" +
+                "    Object.defineProperty(document, 'visibilityState', { value: 'visible', writable: true });" +
+                "    document.addEventListener('visibilitychange', function(e) { e.stopImmediatePropagation(); }, true);" +
+                "    window.addEventListener('visibilitychange', function(e) { e.stopImmediatePropagation(); }, true);" +
+                "    if (!window.fs_hijacked) {" +
+                "      window.fs_hijacked = true;" +
+                "      const origJSON = JSON.parse;" +
+                "      JSON.parse = function(text) {" +
+                "        let data = origJSON(text);" +
+                "        if (data && data.adPlacements) { delete data.adPlacements; }" +
+                "        return data;" +
+                "      };" +
                 "    }" +
+                "    if (!document.getElementById('floatshield-badge')) {" +
+                "      var badge = document.createElement('div');" +
+                "      badge.id = 'floatshield-badge';" +
+                "      badge.style.cssText = 'position:fixed!important;bottom:20px!important;right:20px!important;background:rgba(15,23,42,0.9)!important;color:#38BDF8!important;padding:8px 16px!important;border-radius:30px!important;font-size:12px!important;font-weight:bold!important;z-index:2147483647!important;border:1px solid #38BDF8!important;pointer-events:none!important;';" +
+                "      badge.innerHTML = '🛡️ Background Enabled';" +
+                "      (document.body || document.documentElement).appendChild(badge);" +
+                "    }" +
+                "    var adSelectors = ['.ad-showing', '.ad-interrupting', 'ytm-promoted-sparkles-web-renderer', 'ytm-companion-ad-renderer', 'ytm-statement-banner-renderer', 'ad-slot-renderer', '.ytp-ad-overlay-container'];" +
+                "    adSelectors.forEach(function(s) { document.querySelectorAll(s).forEach(function(el) { el.remove(); }); });" +
                 "    var video = document.querySelector('video');" +
-                "    var isAd = document.querySelector('.ad-showing, .ad-interrupting, .ytp-ad-player-overlay, .ytm-ad-player-overlay');" +
                 "    var skipBtn = document.querySelector('.ytp-ad-skip-button, .ytp-ad-skip-button-modern, .ytm-ad-skip-button');" +
                 "    if (skipBtn) { skipBtn.click(); }" +
-                "    if (isAd && video) {" +
-                "      video.muted = true;" +
-                "      video.currentTime = (video.duration || 100) - 0.1;" +
-                "    }" +
+                "    if (video && video.paused) { video.play(); }" +
                 "  } catch(e) {}" +
                 "})();";
 
         webView.post(() -> webView.evaluateJavascript(js, null));
     }
-
-    @Override
-    public void onBackPressed() {
-        if (webView.getVisibility() == View.VISIBLE && webView.canGoBack()) {
-            webView.goBack();
-        } else if (webView.getVisibility() == View.VISIBLE) {
-            webView.setVisibility(View.GONE);
-            homeLayout.setVisibility(View.VISIBLE);
-        } else {
-            super.onBackPressed();
-        }
-    }
-}
