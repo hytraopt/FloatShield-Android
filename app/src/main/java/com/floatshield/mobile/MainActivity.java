@@ -3,13 +3,13 @@ package com.floatshield.mobile;
 import android.app.Activity;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
-import android.os.Build;
+import android.media.session.MediaSession;
+import android.media.session.PlaybackState;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.Gravity;
 import android.view.View;
-import android.webkit.CookieManager;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
@@ -23,62 +23,78 @@ import java.io.ByteArrayInputStream;
 public class MainActivity extends Activity {
     private WebView webView;
     private LinearLayout homeLayout;
-    private Handler handler = new Handler(Looper.getMainLooper());
+    private MediaSession mediaSession;
+    private boolean isAdBlockingEnabled = true;
+    private int adBlockedCount = 0;
+    private TextView counterText;
+    private TextView toggleText;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        // MediaSession Setup for Notification Controls
+        mediaSession = new MediaSession(this, "FloatShieldSession");
+        mediaSession.setCallback(new MediaSession.Callback() {
+            @Override
+            public void onPlay() { webView.evaluateJavascript("document.querySelector('video').play()", null); }
+            @Override
+            public void onPause() { webView.evaluateJavascript("document.querySelector('video').pause()", null); }
+        });
+        mediaSession.setFlags(MediaSession.FLAG_HANDLES_MEDIA_BUTTONS | MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS);
+        mediaSession.setPlaybackState(new PlaybackState.Builder()
+                .setActions(PlaybackState.ACTION_PLAY | PlaybackState.ACTION_PAUSE)
+                .setState(PlaybackState.STATE_PLAYING, 0, 1.0f).build());
+        mediaSession.setActive(true);
+
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(Color.parseColor("#0F0F0F")); // YouTube Dark Theme Background
+        root.setBackgroundColor(Color.parseColor("#0F0F0F"));
 
         homeLayout = new LinearLayout(this);
         homeLayout.setOrientation(LinearLayout.VERTICAL);
         homeLayout.setGravity(Gravity.CENTER);
         homeLayout.setPadding(40, 40, 40, 40);
-        homeLayout.setLayoutParams(new LinearLayout.LayoutParams(-1, -1));
 
-        TextView title = new TextView(this);
-        title.setText("FloatShield Home");
-        title.setTextSize(24);
-        title.setTextColor(Color.WHITE);
-        title.setPadding(0, 0, 0, 80);
-        homeLayout.addView(title);
+        counterText = new TextView(this);
+        counterText.setText("Ads Blocked: 0");
+        counterText.setTextColor(Color.GREEN);
+        counterText.setPadding(0, 0, 0, 20);
+        homeLayout.addView(counterText);
 
-        // Improved Button UI
+        toggleText = new TextView(this);
+        toggleText.setText("Ad-Blocker: ON");
+        toggleText.setTextColor(Color.WHITE);
+        toggleText.setPadding(0, 0, 0, 40);
+        toggleText.setOnClickListener(v -> {
+            isAdBlockingEnabled = !isAdBlockingEnabled;
+            toggleText.setText(isAdBlockingEnabled ? "Ad-Blocker: ON" : "Ad-Blocker: OFF");
+        });
+        homeLayout.addView(toggleText);
+
         homeLayout.addView(createStyledButton("YouTube", "#FF0000", "https://m.youtube.com"));
         homeLayout.addView(createStyledButton("YouTube Music", "#1E1E1E", "https://music.youtube.com"));
 
         webView = new WebView(this);
         webView.setVisibility(View.GONE);
-        webView.setLayoutParams(new LinearLayout.LayoutParams(-1, -1));
-
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
-        settings.setDomStorageEnabled(true);
         settings.setMediaPlaybackRequiresUserGesture(false);
-        settings.setUserAgentString("Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36");
-
-        webView.setWebChromeClient(new WebChromeClient());
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                if (!isAdBlockingEnabled) return super.shouldInterceptRequest(view, request);
+                
                 String url = request.getUrl().toString().toLowerCase();
-                // Expanded Ad Block List
-                if (url.contains("doubleclick") || url.contains("googleads") || url.contains("pagead") || 
-                    url.contains("adservice") || url.contains("analytics") || url.contains("sclick")) {
+                if (url.contains("doubleclick") || url.contains("pagead") || url.contains("googleads")) {
+                    adBlockedCount++;
+                    new Handler(Looper.getMainLooper()).post(() -> counterText.setText("Ads Blocked: " + adBlockedCount));
                     return new WebResourceResponse("text/plain", "UTF-8", new ByteArrayInputStream("".getBytes()));
                 }
                 return super.shouldInterceptRequest(view, request);
             }
-
-            @Override
-            public void onPageFinished(WebView view, String url) {
-                injectPayloadHijack();
-                super.onPageFinished(view, url);
-            }
         });
+        webView.setWebChromeClient(new WebChromeClient());
 
         root.addView(homeLayout);
         root.addView(webView);
@@ -87,26 +103,19 @@ public class MainActivity extends Activity {
 
     private LinearLayout createStyledButton(String text, String color, String url) {
         LinearLayout btn = new LinearLayout(this);
-        btn.setOrientation(LinearLayout.VERTICAL);
         btn.setGravity(Gravity.CENTER);
         btn.setPadding(60, 40, 60, 40);
         GradientDrawable bg = new GradientDrawable();
-        bg.setShape(GradientDrawable.RECTANGLE);
         bg.setCornerRadius(20);
         bg.setColor(Color.parseColor(color));
         btn.setBackground(bg);
-        
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
         params.setMargins(0, 20, 0, 20);
         btn.setLayoutParams(params);
-
         TextView label = new TextView(this);
         label.setText(text);
         label.setTextColor(Color.WHITE);
-        label.setTextSize(18);
-        label.setTypeface(null, android.graphics.Typeface.BOLD);
         btn.addView(label);
-
         btn.setOnClickListener(v -> {
             homeLayout.setVisibility(View.GONE);
             webView.setVisibility(View.VISIBLE);
@@ -115,29 +124,11 @@ public class MainActivity extends Activity {
         return btn;
     }
 
-    private void injectPayloadHijack() {
-        String js = "javascript:(function() {" +
-                "  Object.defineProperty(document, 'hidden', { value: false, writable: true });" +
-                "  var style = document.createElement('style');" +
-                "  style.innerHTML = '.ad-showing, .ad-interrupting, ytm-promoted-sparkles-web-renderer { display:none !important; }';" +
-                "  document.head.appendChild(style);" +
-                "  setInterval(function() {" +
-                "    var video = document.querySelector('video');" +
-                "    if(video && video.paused) video.play();" +
-                "    var skip = document.querySelector('.ytp-ad-skip-button, .ytm-ad-skip-button');" +
-                "    if(skip) skip.click();" +
-                "  }, 500);" +
-                "})();";
-        webView.evaluateJavascript(js, null);
-    }
-
     @Override
     public void onBackPressed() {
         if (webView.getVisibility() == View.VISIBLE) {
             webView.setVisibility(View.GONE);
             homeLayout.setVisibility(View.VISIBLE);
-        } else {
-            super.onBackPressed();
-        }
+        } else { super.onBackPressed(); }
     }
 }
