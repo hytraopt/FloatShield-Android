@@ -9,15 +9,12 @@ import android.os.Handler;
 import android.os.Looper;
 import android.view.Gravity;
 import android.view.View;
-import android.view.ViewGroup;
-import android.view.animation.AlphaAnimation;
 import android.view.animation.Animation;
 import android.view.animation.ScaleAnimation;
 import android.webkit.CookieManager;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
-import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
@@ -58,9 +55,9 @@ public class MainActivity extends Activity {
         subtitle.setGravity(Gravity.CENTER);
         subtitle.setPadding(0, 10, 0, 80);
 
-        // Animated Glass Cards
-        LinearLayout btnYouTube = createOptionCard("YouTube", "#FF0000", "https://raw.githubusercontent.com/twitter/twemoji/master/assets/72x72/25b6.png");
-        LinearLayout btnYTMusic = createOptionCard("YouTube Music", "#FF0055", "https://raw.githubusercontent.com/twitter/twemoji/master/assets/72x72/1f3b5.png");
+        // Animated Cards
+        LinearLayout btnYouTube = createOptionCard("▶️  YouTube", "#FF0000");
+        LinearLayout btnYTMusic = createOptionCard("🎵  YouTube Music", "#FF0055");
 
         btnYouTube.setOnClickListener(v -> animateAndLoad(v, "https://m.youtube.com"));
         btnYTMusic.setOnClickListener(v -> animateAndLoad(v, "https://music.youtube.com"));
@@ -82,7 +79,7 @@ public class MainActivity extends Activity {
         settings.setMediaPlaybackRequiresUserGesture(false);
         settings.setUserAgentString("Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36");
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.21) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
             CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
         }
@@ -112,11 +109,11 @@ public class MainActivity extends Activity {
         handler.post(adBlockRunnable);
     }
 
-    private LinearLayout createOptionCard(String title, String accentColor, String iconUrl) {
+    private LinearLayout createOptionCard(String title, String accentColor) {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.HORIZONTAL);
-        card.setGravity(Gravity.CENTER_VERTICAL);
-        card.setPadding(40, 40, 40, 40);
+        card.setGravity(Gravity.CENTER);
+        card.setPadding(40, 45, 40, 45);
 
         GradientDrawable shape = new GradientDrawable();
         shape.setCornerRadius(30);
