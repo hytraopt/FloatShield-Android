@@ -19,6 +19,7 @@ import android.os.Looper;
 import android.view.Gravity;
 import android.view.View;
 import android.webkit.CookieManager;
+import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
@@ -43,7 +44,7 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // Native Background Media Control Engine
+        // Native Background Media Session
         mediaSession = new MediaSession(this, "FloatShieldSession");
         mediaSession.setCallback(new MediaSession.Callback() {
             @Override
@@ -95,7 +96,6 @@ public class MainActivity extends Activity {
         LinearLayout spacer = new LinearLayout(this);
         spacer.setLayoutParams(new LinearLayout.LayoutParams(-1, 60));
 
-        // High Resolution Canvas Vector Buttons
         View btnYouTube = createNativeButton("YouTube", new YouTubeLogoDrawable(), "#180A0A", "#FF0000", "https://m.youtube.com");
         View btnYTMusic = createNativeButton("YouTube Music", new YTMusicLogoDrawable(), "#181818", "#38BDF8", "https://music.youtube.com");
 
@@ -115,13 +115,21 @@ public class MainActivity extends Activity {
         settings.setDomStorageEnabled(true);
         settings.setDatabaseEnabled(true);
         settings.setMediaPlaybackRequiresUserGesture(false);
-        // Force Desktop User-Agent to bypass Service Worker ad-injection layers
-        settings.setUserAgentString("Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36");
+        // Clean User Agent to avoid anti-adblock flags
+        settings.setUserAgentString("Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36");
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
             CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
         }
+
+        // Native JS Bridge to count blocked ads synchronously
+        webView.addJavascriptInterface(new Object() {
+            @JavascriptInterface
+            public void notifyAdBlocked() {
+                incrementAdCount();
+            }
+        }, "FSNative");
 
         webView.setWebChromeClient(new WebChromeClient());
         webView.setWebViewClient(new WebViewClient() {
@@ -131,10 +139,11 @@ public class MainActivity extends Activity {
 
                 String url = request.getUrl().toString().toLowerCase();
 
-                // Block YouTube Service Worker & Network Ad Requests
-                if (url.contains("sw.js") || url.contains("doubleclick.net") || url.contains("googleads") ||
-                    url.contains("pagead") || url.contains("/api/stats/ads") || url.contains("/ptracking") ||
-                    url.contains("ad_status") || url.contains("adformat")) {
+                // Direct Network Interception for Ad Servers and Tracking Scripts
+                if (url.contains("doubleclick.net") || url.contains("googleads") ||
+                    url.contains("pagead") || url.contains("/api/stats/ads") || 
+                    url.contains("/ptracking") || url.contains("ad_status") || 
+                    url.contains("adformat") || url.contains("sw.js")) {
                     incrementAdCount();
                     return new WebResourceResponse("text/plain", "UTF-8", new ByteArrayInputStream("".getBytes()));
                 }
@@ -144,13 +153,13 @@ public class MainActivity extends Activity {
             @Override
             public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
                 super.onPageStarted(view, url, favicon);
-                injectMultiLayerBlocker();
+                injectAntiAdEngine();
             }
 
             @Override
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
-                injectMultiLayerBlocker();
+                injectAntiAdEngine();
             }
         });
 
@@ -194,8 +203,7 @@ public class MainActivity extends Activity {
         card.setLayoutParams(params);
 
         ImageView iconView = new ImageView(this);
-        LinearLayout.LayoutParams iconParams = new LinearLayout.LayoutParams(80, 80);
-        iconView.setLayoutParams(iconParams);
+        iconView.setLayoutParams(new LinearLayout.LayoutParams(80, 80));
         iconView.setImageDrawable(logo);
 
         TextView text = new TextView(this);
@@ -217,40 +225,57 @@ public class MainActivity extends Activity {
         return card;
     }
 
-    private void injectMultiLayerBlocker() {
+    private void injectAntiAdEngine() {
         String js = "javascript:(function() {" +
                 "  try {" +
-                "    Object.defineProperty(document, 'hidden', { value: false, writable: true });" +
-                "    Object.defineProperty(document, 'visibilityState', { value: 'visible', writable: true });" +
+                "    if (window.fs_injected) return;" +
+                "    window.fs_injected = true;" +
+                
+                // 1. Service Worker Blocking
                 "    if (navigator.serviceWorker) { navigator.serviceWorker.register = function() { return new Promise(function(){}); }; }" +
-                "    if (!window.fs_hijack) {" +
-                "      window.fs_hijack = true;" +
-                "      const killAds = function(obj) {" +
-                "        if (!obj) return obj;" +
-                "        if (obj.adPlacements) delete obj.adPlacements;" +
-                "        if (obj.playerAds) delete obj.playerAds;" +
-                "        if (obj.adSlots) delete obj.adSlots;" +
-                "        return obj;" +
-                "      };" +
-                "      const origJSON = JSON.parse;" +
-                "      JSON.parse = function(text) { return killAds(origJSON(text)); };" +
-                "    }" +
-                "    if (!document.getElementById('fs-style')) {" +
+                
+                // 2. Object Prototyping & JSON Override to strip Player Response Ads
+                "    const cleanPlayerObj = function(obj) {" +
+                "      if (!obj) return obj;" +
+                "      if (obj.adPlacements) { delete obj.adPlacements; try{ window.FSNative.notifyAdBlocked(); }catch(e){} }" +
+                "      if (obj.playerAds) { delete obj.playerAds; }" +
+                "      if (obj.adSlots) { delete obj.adSlots; }" +
+                "      return obj;" +
+                "    };" +
+                
+                "    const origParse = JSON.parse;" +
+                "    JSON.parse = function(str) {" +
+                "      let parsed = origParse(str);" +
+                "      return cleanPlayerObj(parsed);" +
+                "    };" +
+
+                "    let playerResp = window.ytInitialPlayerResponse;" +
+                "    Object.defineProperty(window, 'ytInitialPlayerResponse', {" +
+                "      get: function() { return cleanPlayerObj(playerResp); }," +
+                "      set: function(val) { playerResp = cleanPlayerObj(val); }," +
+                "      configurable: true" +
+                "    });" +
+
+                // 3. Inject CSS to hide all ad elements
+                "    if (!document.getElementById('fs-css-rules')) {" +
                 "      var style = document.createElement('style');" +
-                "      style.id = 'fs-style';" +
-                "      style.innerHTML = 'ytm-promoted-sparkles-web-renderer, ytm-companion-ad-renderer, .ad-showing, .ad-interrupting, .ytp-ad-overlay-container, ad-slot-renderer, ytm-statement-banner-renderer, .ytp-ad-skip-button-slot { display: none !important; opacity: 0 !important; visibility: hidden !important; }';" +
+                "      style.id = 'fs-css-rules';" +
+                "      style.innerHTML = 'ytm-promoted-sparkles-web-renderer, ytm-companion-ad-renderer, .ad-showing, .ad-interrupting, .ytp-ad-overlay-container, ad-slot-renderer, ytm-statement-banner-renderer, .ytp-ad-skip-button-slot, .ytp-ad-text, ytm-promoted-video-renderer { display: none !important; visibility: hidden !important; opacity: 0 !important; }';" +
                 "      (document.head || document.documentElement).appendChild(style);" +
                 "    }" +
+
+                // 4. Fast Loop Engine (Auto Skip Ads + Instant Forward Ad Videos)
                 "    setInterval(function() {" +
                 "      var video = document.querySelector('video');" +
-                "      var skipBtn = document.querySelector('.ytp-ad-skip-button, .ytm-ad-skip-button, .ytp-ad-skip-button-modern');" +
-                "      if (skipBtn) { skipBtn.click(); }" +
+                "      var skipBtn = document.querySelector('.ytp-ad-skip-button, .ytm-ad-skip-button, .ytp-ad-skip-button-modern, .ytp-ad-skip-button-slot');" +
+                "      if (skipBtn) { skipBtn.click(); try{ window.FSNative.notifyAdBlocked(); }catch(e){} }" +
                 "      if (document.querySelector('.ad-showing, .ad-interrupting') && video) {" +
                 "        video.muted = true;" +
-                "        video.currentTime = (video.duration || 100) - 0.1;" +
+                "        if (!isNaN(video.duration)) { video.currentTime = video.duration - 0.1; }" +
+                "        video.playbackRate = 16.0;" +
                 "      }" +
-                "      if (video && video.paused && !video.ended) { video.play(); }" +
-                "    }, 150);" +
+                "      if (video && video.paused && !video.ended && !document.querySelector('.ad-showing')) { video.play(); }" +
+                "    }, 100);" +
                 "  } catch(e) {}" +
                 "})();";
         webView.post(() -> webView.evaluateJavascript(js, null));
@@ -268,7 +293,7 @@ public class MainActivity extends Activity {
         }
     }
 
-    // Fixed-Bounds Native YouTube Logo Drawable
+    // High Quality Fixed YouTube Canvas Logo
     private static class YouTubeLogoDrawable extends Drawable {
         private final Paint redPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Paint whitePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -299,7 +324,7 @@ public class MainActivity extends Activity {
         @Override public int getOpacity() { return PixelFormat.TRANSLUCENT; }
     }
 
-    // Fixed-Bounds Native YouTube Music Logo Drawable
+    // High Quality Fixed YouTube Music Canvas Logo
     private static class YTMusicLogoDrawable extends Drawable {
         private final Paint redPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Paint whitePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
