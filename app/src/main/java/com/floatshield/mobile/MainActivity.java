@@ -43,7 +43,7 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // Native Background Media Session
+        // Native Background Media Control Engine
         mediaSession = new MediaSession(this, "FloatShieldSession");
         mediaSession.setCallback(new MediaSession.Callback() {
             @Override
@@ -95,9 +95,9 @@ public class MainActivity extends Activity {
         LinearLayout spacer = new LinearLayout(this);
         spacer.setLayoutParams(new LinearLayout.LayoutParams(-1, 60));
 
-        // Native Canvas-based Logo Buttons
-        View btnYouTube = createNativeLogoButton("YouTube", new YouTubeLogoDrawable(), "#180A0A", "#FF0000", "https://m.youtube.com");
-        View btnYTMusic = createNativeLogoButton("YouTube Music", new YTMusicLogoDrawable(), "#181818", "#38BDF8", "https://music.youtube.com");
+        // High Resolution Canvas Vector Buttons
+        View btnYouTube = createNativeButton("YouTube", new YouTubeLogoDrawable(), "#180A0A", "#FF0000", "https://m.youtube.com");
+        View btnYTMusic = createNativeButton("YouTube Music", new YTMusicLogoDrawable(), "#181818", "#38BDF8", "https://music.youtube.com");
 
         homeLayout.addView(title);
         homeLayout.addView(counterText);
@@ -115,7 +115,8 @@ public class MainActivity extends Activity {
         settings.setDomStorageEnabled(true);
         settings.setDatabaseEnabled(true);
         settings.setMediaPlaybackRequiresUserGesture(false);
-        settings.setUserAgentString("Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36");
+        // Force Desktop User-Agent to bypass Service Worker ad-injection layers
+        settings.setUserAgentString("Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36");
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
@@ -130,8 +131,10 @@ public class MainActivity extends Activity {
 
                 String url = request.getUrl().toString().toLowerCase();
 
+                // Block YouTube Service Worker & Network Ad Requests
                 if (url.contains("sw.js") || url.contains("doubleclick.net") || url.contains("googleads") ||
-                    url.contains("pagead") || url.contains("/api/stats/ads") || url.contains("/ptracking")) {
+                    url.contains("pagead") || url.contains("/api/stats/ads") || url.contains("/ptracking") ||
+                    url.contains("ad_status") || url.contains("adformat")) {
                     incrementAdCount();
                     return new WebResourceResponse("text/plain", "UTF-8", new ByteArrayInputStream("".getBytes()));
                 }
@@ -141,13 +144,13 @@ public class MainActivity extends Activity {
             @Override
             public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
                 super.onPageStarted(view, url, favicon);
-                injectAdBlockEngine();
+                injectMultiLayerBlocker();
             }
 
             @Override
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
-                injectAdBlockEngine();
+                injectMultiLayerBlocker();
             }
         });
 
@@ -174,7 +177,7 @@ public class MainActivity extends Activity {
         toggleBtn.setBackground(shape);
     }
 
-    private View createNativeLogoButton(String label, Drawable logoDrawable, String bgColor, String borderColor, String targetUrl) {
+    private View createNativeButton(String label, Drawable logo, String bgColor, String borderColor, String targetUrl) {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.HORIZONTAL);
         card.setGravity(Gravity.CENTER_VERTICAL);
@@ -191,8 +194,9 @@ public class MainActivity extends Activity {
         card.setLayoutParams(params);
 
         ImageView iconView = new ImageView(this);
-        iconView.setLayoutParams(new LinearLayout.LayoutParams(70, 70));
-        iconView.setImageDrawable(logoDrawable);
+        LinearLayout.LayoutParams iconParams = new LinearLayout.LayoutParams(80, 80);
+        iconView.setLayoutParams(iconParams);
+        iconView.setImageDrawable(logo);
 
         TextView text = new TextView(this);
         text.setText(label);
@@ -213,29 +217,27 @@ public class MainActivity extends Activity {
         return card;
     }
 
-    private void injectAdBlockEngine() {
+    private void injectMultiLayerBlocker() {
         String js = "javascript:(function() {" +
                 "  try {" +
                 "    Object.defineProperty(document, 'hidden', { value: false, writable: true });" +
                 "    Object.defineProperty(document, 'visibilityState', { value: 'visible', writable: true });" +
-                "    if (!window.fs_patched) {" +
-                "      window.fs_patched = true;" +
-                "      const cleanJSON = function(obj) {" +
+                "    if (navigator.serviceWorker) { navigator.serviceWorker.register = function() { return new Promise(function(){}); }; }" +
+                "    if (!window.fs_hijack) {" +
+                "      window.fs_hijack = true;" +
+                "      const killAds = function(obj) {" +
                 "        if (!obj) return obj;" +
                 "        if (obj.adPlacements) delete obj.adPlacements;" +
                 "        if (obj.playerAds) delete obj.playerAds;" +
                 "        if (obj.adSlots) delete obj.adSlots;" +
                 "        return obj;" +
                 "      };" +
-                "      const origParse = JSON.parse;" +
-                "      JSON.parse = function(text) {" +
-                "        let data = origParse(text);" +
-                "        return cleanJSON(data);" +
-                "      };" +
+                "      const origJSON = JSON.parse;" +
+                "      JSON.parse = function(text) { return killAds(origJSON(text)); };" +
                 "    }" +
-                "    if (!document.getElementById('fs-css')) {" +
+                "    if (!document.getElementById('fs-style')) {" +
                 "      var style = document.createElement('style');" +
-                "      style.id = 'fs-css';" +
+                "      style.id = 'fs-style';" +
                 "      style.innerHTML = 'ytm-promoted-sparkles-web-renderer, ytm-companion-ad-renderer, .ad-showing, .ad-interrupting, .ytp-ad-overlay-container, ad-slot-renderer, ytm-statement-banner-renderer, .ytp-ad-skip-button-slot { display: none !important; opacity: 0 !important; visibility: hidden !important; }';" +
                 "      (document.head || document.documentElement).appendChild(style);" +
                 "    }" +
@@ -266,7 +268,7 @@ public class MainActivity extends Activity {
         }
     }
 
-    // Native YouTube Vector Drawable
+    // Fixed-Bounds Native YouTube Logo Drawable
     private static class YouTubeLogoDrawable extends Drawable {
         private final Paint redPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Paint whitePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -279,6 +281,8 @@ public class MainActivity extends Activity {
         @Override
         public void draw(Canvas canvas) {
             RectF bounds = new RectF(getBounds());
+            if (bounds.isEmpty()) bounds = new RectF(0, 0, 80, 80);
+
             float r = bounds.height() * 0.25f;
             canvas.drawRoundRect(bounds, r, r, redPaint);
 
@@ -295,7 +299,7 @@ public class MainActivity extends Activity {
         @Override public int getOpacity() { return PixelFormat.TRANSLUCENT; }
     }
 
-    // Native YouTube Music Vector Drawable
+    // Fixed-Bounds Native YouTube Music Logo Drawable
     private static class YTMusicLogoDrawable extends Drawable {
         private final Paint redPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Paint whitePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -308,6 +312,8 @@ public class MainActivity extends Activity {
         @Override
         public void draw(Canvas canvas) {
             RectF bounds = new RectF(getBounds());
+            if (bounds.isEmpty()) bounds = new RectF(0, 0, 80, 80);
+
             float cx = bounds.centerX();
             float cy = bounds.centerY();
             float radius = Math.min(bounds.width(), bounds.height()) / 2f;
